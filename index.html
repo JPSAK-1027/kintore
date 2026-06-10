@@ -86,8 +86,19 @@
   <form id="recordForm">
     <label>日付 <input type="date" id="date" required></label>
     <label>体重(kg) <input type="number" id="weight" step="0.1" placeholder="65.5"></label>
-    <label>種目名 <input type="text" id="exercise" placeholder="ベンチプレス" required></label>
-    <label>重量(kg) <input type="number" id="load" step="0.5" placeholder="60"></label>
+    <label>体脂肪率(%) <input type="number" id="fat" step="0.1" placeholder="18.5"></label>
+    <label>部位
+      <select id="bui" required>
+        <option value="">選択してください</option>
+        <option>胸</option>
+        <option>肩</option>
+        <option>腕</option>
+        <option>背中</option>
+        <option>脚</option>
+      </select>
+    </label>
+<label>種目名 <input type="text" id="exercise" list="exerciseSuggest" placeholder="ベンチプレス" required></label>
+    <datalist id="exerciseSuggest"></datalist>    <label>重量(kg) <input type="number" id="load" step="0.5" placeholder="60"></label>
     <label>回数 <input type="number" id="reps" placeholder="10"></label>
     <label>セット数 <input type="number" id="sets" placeholder="3"></label>
     <label>メモ <textarea id="memo" placeholder="調子よかった"></textarea></label>
@@ -106,7 +117,19 @@
   <script>
     let weightChartObj = null;
 let loadChartObj = null;
-
+// 選んだ部位の種目だけを候補に出す
+    function updateSuggest() {
+      const records = JSON.parse(localStorage.getItem("kintoreRecords") || "[]");
+      const bui = document.getElementById("bui").value;
+      const names = [];
+      records.forEach(function(r) {
+        if (r.bui === bui && r.exercise && names.indexOf(r.exercise) === -1) names.push(r.exercise);
+      });
+      document.getElementById("exerciseSuggest").innerHTML = names.map(function(n) {
+        return '<option value="' + n + '"></option>';
+      }).join("");
+    }
+    document.getElementById("bui").addEventListener("change", updateSuggest);
     // 記録から種目名を集めてプルダウンに反映する
     function updateExerciseSelect() {
      const records = JSON.parse(localStorage.getItem("kintoreRecords") || "[]");
@@ -155,27 +178,34 @@ let loadChartObj = null;
     function drawWeightChart() {
       const records = JSON.parse(localStorage.getItem("kintoreRecords") || "[]");
 
-      // 体重が入力されている記録だけを、日付順に並べる
-      const data = records.filter(function(r) { return r.weight; })
+      const data = records.filter(function(r) { return r.weight || r.fat; })
                           .sort(function(a, b) { return a.date < b.date ? -1 : 1; });
 
       const ctx = document.getElementById("weightChart");
-
-      if (weightChartObj) weightChartObj.destroy(); // 古いグラフを消してから描き直す
+      if (weightChartObj) weightChartObj.destroy();
 
       weightChartObj = new Chart(ctx, {
         type: "line",
         data: {
           labels: data.map(function(r) { return r.date; }),
-          datasets: [{
-            label: "体重(kg)",
-            data: data.map(function(r) { return Number(r.weight); }),
-            borderColor: "#4a90d9",
-            backgroundColor: "rgba(74, 144, 217, 0.1)",
-            tension: 0.3,
-            fill: true
-          }]
-        }
+          datasets: [
+            {
+              label: "体重(kg)",
+              data: data.map(function(r) { return r.weight ? Number(r.weight) : null; }),
+              borderColor: "#4a90d9",
+              backgroundColor: "rgba(74, 144, 217, 0.1)",
+              tension: 0.3
+            },
+            {
+              label: "体脂肪率(%)",
+              data: data.map(function(r) { return r.fat ? Number(r.fat) : null; }),
+              borderColor: "#3ddc97",
+              backgroundColor: "rgba(61, 220, 151, 0.1)",
+              tension: 0.3
+            }
+          ]
+        },
+        options: { spanGaps: true }
       });
     }
 
@@ -190,9 +220,8 @@ let loadChartObj = null;
 
       list.innerHTML = records.slice().reverse().map(function(r) {
         let html = '<div class="card">';
-        html += '<div class="card-date">' + r.date + (r.weight ? " | 体重 " + r.weight + "kg" : "") + '</div>';
-        html += '<div class="card-main">' + r.exercise + " " + r.load + "kg × " + r.reps + "回 × " + r.sets + "セット</div>";
-        if (r.memo) {
+       html += '<div class="card-date">' + r.date + (r.weight ? " | 体重 " + r.weight + "kg" : "") + (r.fat ? " | 体脂肪 " + r.fat + "%" : "") + '</div>';
+html += '<div class="card-main">' + (r.bui ? "【" + r.bui + "】" : "") + r.exercise + " " + r.load + "kg × " + r.reps + "回 × " + r.sets + "セット</div>";        if (r.memo) {
           html += '<div class="card-memo">📝 ' + r.memo + '</div>';
         }
         html += '<button class="del" data-id="' + r.id + '">削除</button>';
@@ -208,7 +237,9 @@ let loadChartObj = null;
         id: Date.now(),
         date: document.getElementById("date").value,
         weight: document.getElementById("weight").value,
+        fat: document.getElementById("fat").value,
         exercise: document.getElementById("exercise").value,
+        bui: document.getElementById("bui").value,
         load: document.getElementById("load").value,
         reps: document.getElementById("reps").value,
         sets: document.getElementById("sets").value,
