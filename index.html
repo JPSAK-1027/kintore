@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>筋トレ記録</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f0f2f5;
+      padding: 16px;
+      max-width: 500px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 22px; text-align: center; }
+    form {
+      background: white;
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    label {
+      display: block;
+      margin-bottom: 12px;
+      font-size: 14px;
+      color: #333;
+    }
+    input, textarea {
+      display: block;
+      width: 100%;
+      padding: 10px;
+      margin-top: 4px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+    button {
+      width: 100%;
+      padding: 14px;
+      background: #4a90d9;
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:active { background: #3a7bc0; }
+    h2 { font-size: 18px; margin-top: 24px; }
+    .card {
+      background: white;
+      padding: 12px;
+      border-radius: 10px;
+      margin-bottom: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .card-date { font-size: 12px; color: #888; }
+    .card-main { font-size: 15px; font-weight: bold; margin-top: 4px; }
+    .card-memo { font-size: 13px; color: #555; margin-top: 4px; }
+    select {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 16px;
+      background: white;
+    }
+  </style>
+</head>
+<body>
+  <h1>💪 筋トレ記録アプリ</h1>
+
+  <form id="recordForm">
+    <label>日付 <input type="date" id="date" required></label>
+    <label>体重(kg) <input type="number" id="weight" step="0.1" placeholder="65.5"></label>
+    <label>種目名 <input type="text" id="exercise" placeholder="ベンチプレス" required></label>
+    <label>重量(kg) <input type="number" id="load" step="0.5" placeholder="60"></label>
+    <label>回数 <input type="number" id="reps" placeholder="10"></label>
+    <label>セット数 <input type="number" id="sets" placeholder="3"></label>
+    <label>メモ <textarea id="memo" placeholder="調子よかった"></textarea></label>
+    <button type="submit">記録する</button>
+  </form>
+
+  <h2>📋 記録一覧</h2>
+  <div id="recordList"></div>
+  <h2>📈 体重の推移</h2>
+  <div class="card"><canvas id="weightChart"></canvas></div>
+  <h2>🏋️ 種目ごとの重量推移</h2>
+  <div class="card">
+    <select id="exerciseSelect"></select>
+    <canvas id="loadChart"></canvas>
+  </div>
+  <script>
+    let weightChartObj = null;
+let loadChartObj = null;
+
+    // 記録から種目名を集めてプルダウンに反映する
+    function updateExerciseSelect() {
+     const records = JSON.parse(localStorage.getItem("kintoreRecords") || "[]");
+      const names = [];
+      records.forEach(function(r) {
+        if (r.exercise && names.indexOf(r.exercise) === -1) names.push(r.exercise);
+      });
+
+      const sel = document.getElementById("exerciseSelect");
+      const current = sel.value;
+      sel.innerHTML = names.map(function(n) {
+        return '<option value="' + n + '">' + n + '</option>';
+      }).join("");
+      if (names.indexOf(current) !== -1) sel.value = current; // 選択中の種目をキープ
+    }
+
+    // 選ばれている種目の重量推移を描く
+    function drawLoadChart() {
+      const records = JSON.parse(localStorage.getItem("kintoreRecords")  || "[]");
+      const name = document.getElementById("exerciseSelect").value;
+
+      const data = records.filter(function(r) { return r.exercise === name && r.load; })
+                          .sort(function(a, b) { return a.date < b.date ? -1 : 1; });
+
+      const ctx = document.getElementById("loadChart");
+      if (loadChartObj) loadChartObj.destroy();
+
+      loadChartObj = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: data.map(function(r) { return r.date; }),
+          datasets: [{
+            label: name + " の重量(kg)",
+            data: data.map(function(r) { return Number(r.load); }),
+            borderColor: "#ff6b35",
+            backgroundColor: "rgba(255, 107, 53, 0.1)",
+            tension: 0.3,
+            fill: true
+          }]
+        }
+      });
+    }
+
+    // プルダウンを切り替えたらグラフを描き直す
+    document.getElementById("exerciseSelect").addEventListener("change", drawLoadChart);
+    function drawWeightChart() {
+      const records = JSON.parse(localStorage.getItem("kintoreRecords") || "[]");
+
+      // 体重が入力されている記録だけを、日付順に並べる
+      const data = records.filter(function(r) { return r.weight; })
+                          .sort(function(a, b) { return a.date < b.date ? -1 : 1; });
+
+      const ctx = document.getElementById("weightChart");
+
+      if (weightChartObj) weightChartObj.destroy(); // 古いグラフを消してから描き直す
+
+      weightChartObj = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: data.map(function(r) { return r.date; }),
+          datasets: [{
+            label: "体重(kg)",
+            data: data.map(function(r) { return Number(r.weight); }),
+            borderColor: "#4a90d9",
+            backgroundColor: "rgba(74, 144, 217, 0.1)",
+            tension: 0.3,
+            fill: true
+          }]
+        }
+      });
+    }
+
+    function showRecords() {
+      const records = JSON.parse(localStorage.getItem("kintoreRecords") || "[]");
+      const list = document.getElementById("recordList");
+
+      if (records.length === 0) {
+        list.innerHTML = "<p>まだ記録がありません</p>";
+        return;
+      }
+
+      list.innerHTML = records.slice().reverse().map(function(r) {
+        let html = '<div class="card">';
+        html += '<div class="card-date">' + r.date + (r.weight ? " | 体重 " + r.weight + "kg" : "") + '</div>';
+        html += '<div class="card-main">' + r.exercise + " " + r.load + "kg × " + r.reps + "回 × " + r.sets + "セット</div>";
+        if (r.memo) {
+          html += '<div class="card-memo">📝 ' + r.memo + '</div>';
+        }
+        html += '</div>';
+        return html;
+      }).join("");
+    }
+
+    document.getElementById("recordForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+
+      const record = {
+        date: document.getElementById("date").value,
+        weight: document.getElementById("weight").value,
+        exercise: document.getElementById("exercise").value,
+        load: document.getElementById("load").value,
+        reps: document.getElementById("reps").value,
+        sets: document.getElementById("sets").value,
+        memo: document.getElementById("memo").value
+      };
+
+      const records = JSON.parse(localStorage.getItem("kintoreRecords") || "[]");
+      records.push(record);
+      localStorage.setItem("kintoreRecords", JSON.stringify(records));
+
+      this.reset();
+      showRecords();
+       drawWeightChart();
+       updateExerciseSelect();
+      drawLoadChart();
+    });
+
+    showRecords();
+    drawWeightChart();
+    updateExerciseSelect();
+      drawLoadChart();
+  </script>
+</body>
+</html>
