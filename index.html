@@ -68,6 +68,16 @@
       font-size: 16px;
       background: white;
     }
+    .card .del {
+      width: auto;
+      padding: 5px 12px;
+      margin-top: 8px;
+      background: none;
+      color: #d9534f;
+      border: 1px solid #d9534f;
+      font-size: 12px;
+      font-weight: normal;
+    }
   </style>
 </head>
 <body>
@@ -185,6 +195,7 @@ let loadChartObj = null;
         if (r.memo) {
           html += '<div class="card-memo">📝 ' + r.memo + '</div>';
         }
+        html += '<button class="del" data-id="' + r.id + '">削除</button>';
         html += '</div>';
         return html;
       }).join("");
@@ -194,6 +205,7 @@ let loadChartObj = null;
       e.preventDefault();
 
       const record = {
+        id: Date.now(),
         date: document.getElementById("date").value,
         weight: document.getElementById("weight").value,
         exercise: document.getElementById("exercise").value,
@@ -213,7 +225,22 @@ let loadChartObj = null;
        updateExerciseSelect();
       drawLoadChart();
     });
+// 削除ボタンの処理
+    document.getElementById("recordList").addEventListener("click", function(e) {
+      if (!e.target.classList.contains("del")) return; // 削除ボタン以外は無視
+      if (!confirm("この記録を削除しますか?")) return;  // 確認ダイアログ
 
+      const id = Number(e.target.getAttribute("data-id")); // 番号札を読む
+      const records = JSON.parse(localStorage.getItem("kintoreRecords") || "[]")
+        .filter(function(r) { return r.id !== id; });      // その札以外を残す
+      localStorage.setItem("kintoreRecords", JSON.stringify(records));
+
+      // 描き直し(あなたの予想の⑤)
+      showRecords();
+      drawWeightChart();
+      updateExerciseSelect();
+      drawLoadChart();
+    });
     showRecords();
     drawWeightChart();
     updateExerciseSelect();
